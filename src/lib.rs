@@ -49,7 +49,9 @@ pub trait FromRow: Sized {
     /// Try's to perform the conversion on a slice of rows.
     ///
     /// Will return an error if the row does not contain the expected column names.
-    fn try_from_rows(rows: Vec<tokio_postgres::Row>) -> Result<vec_map::VecMap<Self>, tokio_postgres::Error> {
+    fn try_from_rows(
+        rows: Vec<tokio_postgres::Row>,
+    ) -> Result<vec_map::VecMap<Self>, tokio_postgres::Error> {
         vec_map::VecMapEx::try_map(rows, Self::try_from_row)
     }
 }
