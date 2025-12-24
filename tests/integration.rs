@@ -34,19 +34,10 @@ fn from_row(row: &Row) {
 }
 
 #[allow(dead_code)]
-fn from_rows(rows: &[Row]) {
-    let _ = Todo::from_rows(rows);
-    let _ = Todo::try_from_rows(rows).unwrap();
+fn from_slice(rows: &[Row]) {
+    let _ = Todo::from_slice(rows);
+    let _ = Todo::try_from_slice(rows).unwrap();
 
-    let _ = User::from_rows(rows);
-    let _ = User::try_from_rows(rows).unwrap();
-}
-
-#[allow(dead_code)]
-fn from_row_maybe(row: Option<&Row>) {
-    let _ = Todo::from_row_maybe(row);
-    let _ = Todo::try_from_row_maybe(row).unwrap();
-
-    let _ = User::from_row_maybe(row);
-    let _ = User::try_from_row_maybe(row).unwrap();
+    let _ = User::from_slice(rows);
+    let _ = User::try_from_slice(rows).unwrap();
 }
