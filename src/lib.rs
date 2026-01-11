@@ -70,3 +70,19 @@ impl<T: AsRow> AsRow for &T {
         (*self).as_row()
     }
 }
+
+impl<T: FromRow> FromRow for Option<T> {
+    fn try_from_row(row: impl AsRow) -> Result<Self, tokio_postgres::Error> {
+        match T::try_from_row(row) {
+            Ok(row) => Ok(Some(row)),
+            Err(error)
+                if std::error::Error::source(&error).is_some_and(|x| {
+                    x.downcast_ref::<tokio_postgres::types::WasNull>().is_some()
+                }) =>
+            {
+                Ok(None)
+            }
+            Err(error) => Err(error),
+        }
+    }
+}
