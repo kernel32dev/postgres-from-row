@@ -19,6 +19,7 @@ doctest = false
 tokio-postgres = { version = "0.7", default-features = false }
 postgres-from-row-derive = { path = "postgres-from-row-derive", version = "=0.5.3" }
 vec-map = { workspace = true }
+similar = "2.7.0"
 
 [dev-dependencies]
 tokio-postgres = { version = "0.7", default-features = false, features = ["with-serde_json-1"] }

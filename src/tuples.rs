@@ -1,28 +1,52 @@
-use tokio_postgres::types::FromSqlOwned;
+use tokio_postgres::types::{FromSqlOwned, FromSql};
 
 use crate::FromRow;
 
 impl FromRow for () {
-    fn try_from_row(row: impl crate::AsRow) -> Result<Self, tokio_postgres::Error> {
-        let _ = row;
+    const COLUMN_COUNT: usize = 0;
+    fn try_from_row_joined(_: Option<&mut Self>, _: &tokio_postgres::Row, _: usize) -> Result<Option<Self>, tokio_postgres::Error> {
+        Ok(Some(()))
+    }
+    fn report_expected_columns() -> crate::ExpectedColumns {
+        crate::ExpectedColumns::Borrowed(&[])
+    }
+    fn try_assert_matches(_: &[tokio_postgres::Column]) -> Result<(), ()> {
+        // ignore incoming columns
         Ok(())
     }
 }
+
+macro_rules! count_ident {
+    ($i:ident) => {1};
+}
+
 macro_rules! impl_from_row_for_tuple {
     ($($T:ident),*) => {
         impl<$($T: FromSqlOwned),*> FromRow for ($($T,)*) {
-            fn try_from_row(row: impl crate::AsRow) -> Result<Self, tokio_postgres::Error> {
-                let row = row.as_row();
-                let mut i = 0;
-
+            const COLUMN_COUNT: usize = 0 $( + count_ident!($T))*;
+            fn try_from_row_joined(_: Option<&mut Self>, row: &tokio_postgres::Row, mut i: usize) -> Result<Option<Self>, tokio_postgres::Error> {
                 #[allow(unused_assignments)]
-                Ok(($(
+                Ok(Some(($(
                     row.try_get::<_, $T>({
                         let j = i;
                         i += 1;
                         j
                     })?,
-                )*))
+                )*)))
+            }
+            fn report_expected_columns() -> crate::ExpectedColumns {
+                crate::ExpectedColumns::Borrowed(const {
+                    &[$(crate::ExpectedColumn::new::<$T>(None),)*]
+                })
+            }
+            fn try_assert_matches(columns: &[tokio_postgres::Column]) -> Result<(), ()> {
+                #[allow(non_snake_case)]
+                let [$($T,)*] = columns else {return Err(())};
+                if true $(&& <$T as FromSql>::accepts($T.type_()))* {
+                    Ok(())
+                } else {
+                    Err(())
+                }
             }
         }
     };

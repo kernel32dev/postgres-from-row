@@ -10,12 +10,7 @@ pub struct Todo {
     text: String,
     #[from_row(flatten)]
     user: User,
-    #[from_row(from_fn = "json")]
-    json: HashMap<String, bool>,
-}
-
-fn json<T>(wrapper: Json<T>) -> T {
-    wrapper.0
+    json: Json<HashMap<String, bool>>,
 }
 
 #[derive(FromRow)]
