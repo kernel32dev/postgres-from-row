@@ -83,12 +83,14 @@ impl DeriveFromRow {
         let original_predicates = where_clause.map(|w| &w.predicates).into_iter();
         let predicates = self.predicates()?;
 
-        let generate_column_count_terms = self.fields()
+        let generate_column_count_terms = self
+            .fields()
             .iter()
             .map(|f| f.generate_column_count())
             .collect::<syn::Result<Vec<_>>>()?;
 
-        let try_from_row_bindings = self.fields()
+        let try_from_row_bindings = self
+            .fields()
             .iter()
             .map(|f| f.generate_try_from_row(self.fields()))
             .collect::<syn::Result<TokenStream2>>()?;
@@ -96,7 +98,8 @@ impl DeriveFromRow {
         let try_from_row_idents = self.fields().iter().map(|f| f.ident.as_ref().unwrap());
 
         let report_expected_columns = if self.fields().iter().any(|x| x.flatten || x.join) {
-            let report_expected_columns = self.fields()
+            let report_expected_columns = self
+                .fields()
                 .iter()
                 .map(|f| f.generate_report_expected_columns_to_vec())
                 .collect::<syn::Result<TokenStream2>>()?;
@@ -106,7 +109,8 @@ impl DeriveFromRow {
                 postgres_from_row::ExpectedColumns::Owned(expected)
             }
         } else {
-            let report_expected_columns = self.fields()
+            let report_expected_columns = self
+                .fields()
                 .iter()
                 .map(|f| f.generate_report_expected_columns_to_const_slice())
                 .collect::<syn::Result<Vec<_>>>()?;
@@ -119,7 +123,8 @@ impl DeriveFromRow {
             }
         };
 
-        let try_assert_matches = self.fields()
+        let try_assert_matches = self
+            .fields()
             .iter()
             .map(|f| f.generate_try_assert_matches())
             .collect::<syn::Result<TokenStream2>>()?;
@@ -328,9 +333,11 @@ impl FromRowField {
                 j
             })?, "when try_from_row_joined is called with last = None it should never return None"))
         } else if self.join {
-            let comparisons = fields.iter().filter(|x| !x.join).map(|x| x.ident.as_ref().unwrap()).map(|ident| {
-                quote!(__last.#ident == #ident)
-            });
+            let comparisons = fields
+                .iter()
+                .filter(|x| !x.join)
+                .map(|x| x.ident.as_ref().unwrap())
+                .map(|ident| quote!(__last.#ident == #ident));
             quote!(
                 if let std::option::Option::Some(mut __last) = __last.as_deref_mut().filter(|__last| true #(&& #comparisons)*) {
                     let item = <#target_ty as postgres_from_row::FromRow>::try_from_row_joined(std::option::Option::Some(&mut __last.#ident), __row, {
@@ -402,7 +409,6 @@ impl FromRowField {
     }
 
     fn generate_report_expected_columns_to_const_slice(&self) -> Result<TokenStream2> {
-        
         let column_name = self.column_name();
         let target_ty = if self.from_fn.is_none() && self.try_from_fn.is_none() {
             self.target_ty()?

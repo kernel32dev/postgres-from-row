@@ -345,6 +345,69 @@ impl<T: FromRow> FromRow for Vec<T> {
     }
 }
 
+pub struct RowStream<T> {
+    row_stream: tokio_postgres::RowStream,
+    acc: Option<T>,
+}
+impl<T> From<tokio_postgres::RowStream> for RowStream<T> {
+    fn from(value: tokio_postgres::RowStream) -> Self {
+        Self {
+            row_stream: value,
+            acc: None,
+        }
+    }
+}
+impl<T: FromRow> futures_core::Stream for RowStream<T> {
+    type Item = Result<T, tokio_postgres::Error>;
+
+    fn poll_next(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        use std::task::Poll;
+        let (mut row_stream, acc) = unsafe {
+            let this = self.get_unchecked_mut();
+            (
+                std::pin::Pin::new_unchecked(&mut this.row_stream),
+                &mut this.acc,
+            )
+        };
+        loop {
+            return match row_stream.as_mut().poll_next(cx) {
+                Poll::Pending => Poll::Pending,
+                Poll::Ready(None) => Poll::Ready(acc.take().map(Ok)),
+                Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
+                Poll::Ready(Some(Ok(next_row))) => {
+                    match T::try_from_row_joined(acc.as_mut(), &next_row, 0) {
+                        Ok(Some(x)) => match acc.replace(x) {
+                            Some(value) => Poll::Ready(Some(Ok(value))),
+                            None => continue,
+                        },
+                        Ok(None) => continue,
+                        Err(e) => Poll::Ready(Some(Err(e))),
+                    }
+                }
+            };
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let (min, max) = self.row_stream.size_hint();
+        (min.max(self.acc.is_some() as usize), max)
+    }
+}
+impl<T> std::ops::Deref for RowStream<T> {
+    type Target = tokio_postgres::RowStream;
+    fn deref(&self) -> &Self::Target {
+        &self.row_stream
+    }
+}
+impl<T> std::ops::DerefMut for RowStream<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.row_stream
+    }
+}
+
 fn is_was_null(e: &tokio_postgres::Error) -> bool {
     std::error::Error::source(&e)
         .is_some_and(|x| x.downcast_ref::<tokio_postgres::types::WasNull>().is_some())

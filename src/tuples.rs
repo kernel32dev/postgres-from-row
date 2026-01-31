@@ -1,10 +1,14 @@
-use tokio_postgres::types::{FromSqlOwned, FromSql};
+use tokio_postgres::types::{FromSql, FromSqlOwned};
 
 use crate::FromRow;
 
 impl FromRow for () {
     const COLUMN_COUNT: usize = 0;
-    fn try_from_row_joined(_: Option<&mut Self>, _: &tokio_postgres::Row, _: usize) -> Result<Option<Self>, tokio_postgres::Error> {
+    fn try_from_row_joined(
+        _: Option<&mut Self>,
+        _: &tokio_postgres::Row,
+        _: usize,
+    ) -> Result<Option<Self>, tokio_postgres::Error> {
         Ok(Some(()))
     }
     fn report_expected_columns() -> crate::ExpectedColumns {
@@ -17,7 +21,9 @@ impl FromRow for () {
 }
 
 macro_rules! count_ident {
-    ($i:ident) => {1};
+    ($i:ident) => {
+        1
+    };
 }
 
 macro_rules! impl_from_row_for_tuple {
