@@ -347,13 +347,16 @@ impl<T: FromRow> FromRow for Vec<T> {
 
 pub struct RowStream<T> {
     row_stream: tokio_postgres::RowStream,
-    acc: Option<T>,
+    /// * `None` = row_stream was polled to completion, this stream is terminated
+    /// * `Some(None)` = row_stream was not polled to completion, and there is no value in the accumulator
+    /// * `Some(Some(T))` = row_stream was not polled to completion, and there is a value in the accumulator
+    acc: Option<Option<T>>,
 }
 impl<T> From<tokio_postgres::RowStream> for RowStream<T> {
     fn from(value: tokio_postgres::RowStream) -> Self {
         Self {
             row_stream: value,
-            acc: None,
+            acc: Some(None),
         }
     }
 }
@@ -372,14 +375,17 @@ impl<T: FromRow> futures_core::Stream for RowStream<T> {
                 &mut this.acc,
             )
         };
+        let Some(a) = acc else {
+            return Poll::Ready(None);
+        };
         loop {
             return match row_stream.as_mut().poll_next(cx) {
                 Poll::Pending => Poll::Pending,
-                Poll::Ready(None) => Poll::Ready(acc.take().map(Ok)),
+                Poll::Ready(None) => Poll::Ready(acc.take().flatten().map(Ok)),
                 Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
                 Poll::Ready(Some(Ok(next_row))) => {
-                    match T::try_from_row_joined(acc.as_mut(), &next_row, 0) {
-                        Ok(Some(x)) => match acc.replace(x) {
+                    match T::try_from_row_joined(a.as_mut(), &next_row, 0) {
+                        Ok(Some(x)) => match a.replace(x) {
                             Some(value) => Poll::Ready(Some(Ok(value))),
                             None => continue,
                         },
@@ -392,19 +398,23 @@ impl<T: FromRow> futures_core::Stream for RowStream<T> {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let (min, max) = self.row_stream.size_hint();
-        (min.max(self.acc.is_some() as usize), max)
+        if let Some(has_acc) = self.acc.as_ref().map(|x| x.is_some()) {
+            let (min, max) = self.row_stream.size_hint();
+            (min.max(has_acc as usize), max)
+        } else {
+            (0, None)
+        }
+    }
+}
+impl<T: FromRow> futures_core::stream::FusedStream for RowStream<T> {
+    fn is_terminated(&self) -> bool {
+        self.acc.is_none()
     }
 }
 impl<T> std::ops::Deref for RowStream<T> {
     type Target = tokio_postgres::RowStream;
     fn deref(&self) -> &Self::Target {
         &self.row_stream
-    }
-}
-impl<T> std::ops::DerefMut for RowStream<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.row_stream
     }
 }
 
